@@ -1,0 +1,90 @@
+<!DOCTYPE html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>XState History States (상태 기억)</title>
+  </head>
+  <body>
+    <h2>8. History States - 이전 상태 기억</h2>
+    <button id="pauseBtn">일시정지</button>
+    <button id="resumeBtn">재개</button>
+    <button id="switchModeBtn">모드 변경</button>
+
+    <p>현재 상태: <span id="currentState">읽기</span></p>
+    <p>작업 모드: <span id="workMode">읽기</span></p>
+
+    <script src="https://unpkg.com/xstate@4.38.3/dist/xstate.js"></script>
+    <script>
+      const { createMachine } = XState;
+
+      const workMachine = createMachine({
+        id: "work",
+        initial: "working",
+        states: {
+          working: {
+            initial: "reading",
+            states: {
+              reading: {
+                on: { SWITCH_MODE: "writing" },
+              },
+              writing: {
+                on: { SWITCH_MODE: "reading" },
+              },
+              hist: {
+                type: "history",
+                history: "shallow",
+              },
+            },
+            on: { PAUSE: "paused" },
+          },
+          paused: {
+            on: { RESUME: "working.hist" },
+          },
+        },
+      });
+
+      let state = workMachine.initialState;
+
+      function updateUI() {
+        const stateMap = {
+          "working.reading": "작업중 - 읽기",
+          "working.writing": "작업중 - 쓰기",
+          paused: "일시정지",
+        };
+
+        document.getElementById("currentState").textContent =
+          stateMap[state.toStrings().join(".")] || state.value;
+
+        if (state.matches("working")) {
+          document.getElementById("workMode").textContent = state.matches(
+            "working.reading"
+          )
+            ? "읽기"
+            : "쓰기";
+        } else {
+          document.getElementById("workMode").textContent = "정지됨";
+        }
+
+        // 버튼 상태 관리
+        document.getElementById("pauseBtn").disabled = state.matches("paused");
+        document.getElementById("resumeBtn").disabled =
+          state.matches("working");
+        document.getElementById("switchModeBtn").disabled =
+          state.matches("paused");
+      }
+
+      function send(event) {
+        state = workMachine.transition(state, event);
+        updateUI();
+      }
+
+      document.getElementById("pauseBtn").onclick = () => send("PAUSE");
+      document.getElementById("resumeBtn").onclick = () => send("RESUME");
+      document.getElementById("switchModeBtn").onclick = () =>
+        send("SWITCH_MODE");
+
+      updateUI();
+    </script>
+  </body>
+</html>

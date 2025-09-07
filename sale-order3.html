@@ -1,0 +1,273 @@
+<!DOCTYPE html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>Sale Order 3 - 완전한 ERP 판매주문 프로세스</title>
+  </head>
+  <body>
+    <h2>Sale Order 3. 완전한 ERP 판매주문 프로세스</h2>
+
+    <div>
+      <button id="createBtn">주문 생성</button>
+      <button id="creditBtn">신용 체크</button>
+      <button id="processBtn">주문 처리 시작</button>
+      <button id="confirmBtn">배송 확인</button>
+      <button id="paymentBtn">수금 완료</button>
+    </div>
+
+    <div>
+      <h3>주문 정보</h3>
+      <p>주문 번호: <span id="orderNo">-</span></p>
+      <p>고객: <span id="customer">대한상사</span></p>
+      <p>주문 금액: <span id="amount">₩5,000,000</span></p>
+
+      <h3>프로세스 상태</h3>
+      <p>📋 주문 상태: <span id="orderStatus">신규</span></p>
+      <p>💳 신용 체크: <span id="creditStatus">대기</span></p>
+      <p>📦 물류 상태: <span id="logisticsStatus">대기</span></p>
+      <p>💰 수금 상태: <span id="paymentStatus">대기</span></p>
+
+      <h3>세부 정보</h3>
+      <p>신용 한도: <span id="creditLimit">₩10,000,000</span></p>
+      <p>재고 할당: <span id="stockStatus">미할당</span></p>
+      <p>배송지: <span id="delivery">서울시 강남구</span></p>
+      <p>결제 조건: <span id="terms">NET 30</span></p>
+    </div>
+
+    <script src="https://unpkg.com/xstate@4.38.3/dist/xstate.js"></script>
+    <script>
+      const { createMachine, assign } = XState;
+
+      const erpSaleOrderMachine = createMachine(
+        {
+          id: "erpSaleOrder",
+          initial: "draft",
+          context: {
+            orderNo: null,
+            customer: "대한상사",
+            amount: 5000000,
+            creditLimit: 10000000,
+            creditApproved: false,
+            stockAllocated: false,
+            shipped: false,
+            paymentReceived: false,
+          },
+          states: {
+            draft: {
+              on: {
+                CREATE: {
+                  target: "created",
+                  actions: "generateOrderNo",
+                },
+              },
+            },
+            created: {
+              on: {
+                CREDIT_CHECK: "creditChecking",
+              },
+            },
+            creditChecking: {
+              invoke: {
+                src: (context) =>
+                  new Promise((resolve, reject) => {
+                    setTimeout(() => {
+                      if (context.amount <= context.creditLimit) {
+                        resolve({ approved: true });
+                      } else {
+                        reject("신용 한도 초과");
+                      }
+                    }, 2000);
+                  }),
+                onDone: {
+                  target: "creditApproved",
+                  actions: assign({ creditApproved: true }),
+                },
+                onError: "creditRejected",
+              },
+            },
+            creditApproved: {
+              on: {
+                PROCESS: "processing",
+              },
+            },
+            processing: {
+              type: "parallel",
+              states: {
+                logistics: {
+                  initial: "stockAllocation",
+                  states: {
+                    stockAllocation: {
+                      invoke: {
+                        src: () =>
+                          new Promise((resolve) => {
+                            setTimeout(() => resolve(), 1500);
+                          }),
+                        onDone: {
+                          target: "shipping",
+                          actions: assign({ stockAllocated: true }),
+                        },
+                      },
+                    },
+                    shipping: {
+                      invoke: {
+                        src: () =>
+                          new Promise((resolve) => {
+                            setTimeout(() => resolve(), 3000);
+                          }),
+                        onDone: {
+                          target: "shipped",
+                          actions: assign({ shipped: true }),
+                        },
+                      },
+                    },
+                    shipped: {
+                      type: "final",
+                    },
+                  },
+                },
+                finance: {
+                  initial: "waitingPayment",
+                  states: {
+                    waitingPayment: {
+                      on: {
+                        PAYMENT_RECEIVED: {
+                          target: "paid",
+                          actions: assign({ paymentReceived: true }),
+                        },
+                      },
+                    },
+                    paid: {
+                      type: "final",
+                    },
+                  },
+                },
+              },
+              onDone: "completed",
+            },
+            completed: {
+              on: {
+                CONFIRM: "closed",
+              },
+            },
+            closed: {
+              type: "final",
+            },
+            creditRejected: {
+              on: {
+                CREATE: "draft",
+              },
+            },
+          },
+        },
+        {
+          actions: {
+            generateOrderNo: assign({
+              orderNo: () =>
+                "SO" + new Date().getFullYear() + String(Date.now()).substr(-8),
+            }),
+          },
+        }
+      );
+
+      let state = erpSaleOrderMachine.initialState;
+
+      function updateUI() {
+        // 기본 정보
+        document.getElementById("orderNo").textContent =
+          state.context.orderNo || "-";
+        document.getElementById("customer").textContent =
+          state.context.customer;
+        document.getElementById(
+          "amount"
+        ).textContent = `₩${state.context.amount.toLocaleString()}`;
+        document.getElementById(
+          "creditLimit"
+        ).textContent = `₩${state.context.creditLimit.toLocaleString()}`;
+
+        // 주문 상태
+        const orderStatusMap = {
+          draft: "신규",
+          created: "생성됨",
+          creditChecking: "신용 체크중",
+          creditApproved: "신용 승인",
+          processing: "처리중",
+          completed: "처리 완료",
+          closed: "완료",
+          creditRejected: "신용 거부",
+        };
+        document.getElementById("orderStatus").textContent =
+          orderStatusMap[state.value] || state.value;
+
+        // 신용 체크 상태
+        if (state.matches("creditChecking")) {
+          document.getElementById("creditStatus").textContent = "확인중...";
+        } else if (state.context.creditApproved) {
+          document.getElementById("creditStatus").textContent = "승인 ✓";
+        } else if (state.matches("creditRejected")) {
+          document.getElementById("creditStatus").textContent = "거부 ✗";
+        } else {
+          document.getElementById("creditStatus").textContent = "대기";
+        }
+
+        // 물류 상태
+        if (state.matches("processing")) {
+          if (state.matches({ processing: { logistics: "stockAllocation" } })) {
+            document.getElementById("logisticsStatus").textContent =
+              "재고 할당중...";
+            document.getElementById("stockStatus").textContent = "할당중...";
+          } else if (state.matches({ processing: { logistics: "shipping" } })) {
+            document.getElementById("logisticsStatus").textContent =
+              "배송중...";
+            document.getElementById("stockStatus").textContent = "할당 완료";
+          } else if (state.matches({ processing: { logistics: "shipped" } })) {
+            document.getElementById("logisticsStatus").textContent =
+              "배송 완료 ✓";
+            document.getElementById("stockStatus").textContent = "할당 완료";
+          }
+        } else if (state.matches("completed") || state.matches("closed")) {
+          document.getElementById("logisticsStatus").textContent = "완료 ✓";
+          document.getElementById("stockStatus").textContent = "할당 완료";
+        } else {
+          document.getElementById("logisticsStatus").textContent = "대기";
+          document.getElementById("stockStatus").textContent = "미할당";
+        }
+
+        // 수금 상태
+        if (state.context.paymentReceived) {
+          document.getElementById("paymentStatus").textContent = "수금 완료 ✓";
+        } else if (state.matches("processing") || state.matches("completed")) {
+          document.getElementById("paymentStatus").textContent = "수금 대기";
+        } else {
+          document.getElementById("paymentStatus").textContent = "대기";
+        }
+
+        // 버튼 활성화
+        document.getElementById("createBtn").disabled =
+          !state.matches("draft") && !state.matches("creditRejected");
+        document.getElementById("creditBtn").disabled =
+          !state.matches("created");
+        document.getElementById("processBtn").disabled =
+          !state.matches("creditApproved");
+        document.getElementById("confirmBtn").disabled =
+          !state.matches("completed");
+        document.getElementById("paymentBtn").disabled =
+          !state.matches("processing") || state.context.paymentReceived;
+      }
+
+      function send(event) {
+        state = erpSaleOrderMachine.transition(state, event);
+        updateUI();
+      }
+
+      document.getElementById("createBtn").onclick = () => send("CREATE");
+      document.getElementById("creditBtn").onclick = () => send("CREDIT_CHECK");
+      document.getElementById("processBtn").onclick = () => send("PROCESS");
+      document.getElementById("confirmBtn").onclick = () => send("CONFIRM");
+      document.getElementById("paymentBtn").onclick = () =>
+        send("PAYMENT_RECEIVED");
+
+      updateUI();
+    </script>
+  </body>
+</html>

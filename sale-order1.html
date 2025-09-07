@@ -1,0 +1,156 @@
+<!DOCTYPE html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>Sale Order 1 - 기본 판매주문 생성</title>
+  </head>
+  <body>
+    <h2>Sale Order 1. 기본 판매주문 생성 및 승인</h2>
+
+    <div>
+      <button id="createBtn">주문 생성</button>
+      <button id="submitBtn">승인 요청</button>
+      <button id="approveBtn">승인</button>
+      <button id="rejectBtn">반려</button>
+      <button id="cancelBtn">취소</button>
+    </div>
+
+    <div>
+      <p>주문 상태: <span id="status">신규</span></p>
+      <p>주문 번호: <span id="orderNo">-</span></p>
+      <p>고객: <span id="customer">ABC 회사</span></p>
+      <p>금액: <span id="amount">₩1,500,000</span></p>
+      <p>승인자: <span id="approver">-</span></p>
+    </div>
+
+    <script src="https://unpkg.com/xstate@4.38.3/dist/xstate.js"></script>
+    <script>
+      const { createMachine, assign } = XState;
+
+      const saleOrderMachine = createMachine(
+        {
+          id: "saleOrder",
+          initial: "draft",
+          context: {
+            orderNo: null,
+            customer: "ABC 회사",
+            amount: 1500000,
+            approver: null,
+            createdDate: null,
+          },
+          states: {
+            draft: {
+              on: {
+                CREATE: {
+                  target: "created",
+                  actions: "generateOrderNo",
+                },
+              },
+            },
+            created: {
+              on: {
+                SUBMIT: "pendingApproval",
+                CANCEL: "cancelled",
+              },
+            },
+            pendingApproval: {
+              on: {
+                APPROVE: {
+                  target: "approved",
+                  actions: "setApprover",
+                },
+                REJECT: {
+                  target: "rejected",
+                  actions: "setApprover",
+                },
+              },
+            },
+            approved: {
+              on: {
+                CANCEL: "cancelled",
+              },
+            },
+            rejected: {
+              on: {
+                CREATE: {
+                  target: "created",
+                  actions: "resetOrder",
+                },
+              },
+            },
+            cancelled: {
+              type: "final",
+            },
+          },
+        },
+        {
+          actions: {
+            generateOrderNo: assign({
+              orderNo: () =>
+                "SO" + new Date().getFullYear() + String(Date.now()).substr(-6),
+              createdDate: () => new Date(),
+            }),
+            setApprover: assign({
+              approver: () => "김승인",
+            }),
+            resetOrder: assign({
+              orderNo: null,
+              approver: null,
+              createdDate: null,
+            }),
+          },
+        }
+      );
+
+      let state = saleOrderMachine.initialState;
+
+      function updateUI() {
+        const statusMap = {
+          draft: "신규",
+          created: "생성됨",
+          pendingApproval: "승인대기",
+          approved: "승인완료",
+          rejected: "반려됨",
+          cancelled: "취소됨",
+        };
+
+        document.getElementById("status").textContent = statusMap[state.value];
+        document.getElementById("orderNo").textContent =
+          state.context.orderNo || "-";
+        document.getElementById("customer").textContent =
+          state.context.customer;
+        document.getElementById(
+          "amount"
+        ).textContent = `₩${state.context.amount.toLocaleString()}`;
+        document.getElementById("approver").textContent =
+          state.context.approver || "-";
+
+        // 버튼 활성화
+        document.getElementById("createBtn").disabled =
+          !state.matches("draft") && !state.matches("rejected");
+        document.getElementById("submitBtn").disabled =
+          !state.matches("created");
+        document.getElementById("approveBtn").disabled =
+          !state.matches("pendingApproval");
+        document.getElementById("rejectBtn").disabled =
+          !state.matches("pendingApproval");
+        document.getElementById("cancelBtn").disabled =
+          state.matches("cancelled") || state.matches("draft");
+      }
+
+      function send(event) {
+        state = saleOrderMachine.transition(state, event);
+        updateUI();
+      }
+
+      document.getElementById("createBtn").onclick = () => send("CREATE");
+      document.getElementById("submitBtn").onclick = () => send("SUBMIT");
+      document.getElementById("approveBtn").onclick = () => send("APPROVE");
+      document.getElementById("rejectBtn").onclick = () => send("REJECT");
+      document.getElementById("cancelBtn").onclick = () => send("CANCEL");
+
+      updateUI();
+    </script>
+  </body>
+</html>

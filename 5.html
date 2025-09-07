@@ -1,0 +1,91 @@
+<!DOCTYPE html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>XState Services (비동기 처리)</title>
+  </head>
+  <body>
+    <h2>5. Services - 비동기 작업 처리</h2>
+    <button id="fetchBtn">데이터 가져오기</button>
+    <p>상태: <span id="status">대기중</span></p>
+    <div id="result"></div>
+
+    <script src="https://unpkg.com/xstate@4.38.3/dist/xstate.js"></script>
+    <script>
+      const { createMachine, assign } = XState;
+
+      const fetchMachine = createMachine({
+        id: "fetch",
+        initial: "idle",
+        context: { data: null, error: null },
+        states: {
+          idle: {
+            on: { FETCH: "loading" },
+          },
+          loading: {
+            invoke: {
+              id: "fetchData",
+              src: () =>
+                new Promise((resolve, reject) => {
+                  setTimeout(() => {
+                    Math.random() > 0.3
+                      ? resolve({
+                          message: "데이터 로드 성공!",
+                          time: new Date().toLocaleTimeString(),
+                        })
+                      : reject("네트워크 오류");
+                  }, 1500);
+                }),
+              onDone: {
+                target: "success",
+                actions: assign({ data: (_, event) => event.data }),
+              },
+              onError: {
+                target: "failure",
+                actions: assign({ error: (_, event) => event.data }),
+              },
+            },
+          },
+          success: {
+            on: { FETCH: "loading" },
+          },
+          failure: {
+            on: { FETCH: "loading" },
+          },
+        },
+      });
+
+      let state = fetchMachine.initialState;
+
+      function updateUI() {
+        const statusMap = {
+          idle: "대기중",
+          loading: "로딩중...",
+          success: "성공",
+          failure: "실패",
+        };
+
+        document.getElementById("status").textContent = statusMap[state.value];
+
+        const result = document.getElementById("result");
+        if (state.value === "success") {
+          result.innerHTML = `<p style="color: green;">✓ ${state.context.data.message} (${state.context.data.time})</p>`;
+        } else if (state.value === "failure") {
+          result.innerHTML = `<p style="color: red;">✗ ${state.context.error}</p>`;
+        } else {
+          result.innerHTML = "";
+        }
+      }
+
+      function send(event) {
+        state = fetchMachine.transition(state, event);
+        updateUI();
+      }
+
+      document.getElementById("fetchBtn").onclick = () => send("FETCH");
+
+      updateUI();
+    </script>
+  </body>
+</html>

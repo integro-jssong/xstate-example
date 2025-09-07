@@ -1,0 +1,116 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Order Process - 기본 주문 흐름</title>
+</head>
+<body>
+    <h2>9. Order Process - 기본 주문 상태 관리</h2>
+    
+    <div>
+        <button id="addToCartBtn">장바구니 담기</button>
+        <button id="checkoutBtn">결제하기</button>
+        <button id="confirmBtn">주문확인</button>
+        <button id="cancelBtn">주문취소</button>
+        <button id="resetBtn">처음부터</button>
+    </div>
+    
+    <div>
+        <p>주문 상태: <span id="orderStatus">장바구니 비어있음</span></p>
+        <p>상품 수량: <span id="itemCount">0</span></p>
+    </div>
+
+    <script src="https://unpkg.com/xstate@4.38.3/dist/xstate.js"></script>
+    <script>
+        const { createMachine, assign } = XState;
+
+        const orderMachine = createMachine({
+            id: 'order',
+            initial: 'empty',
+            context: { itemCount: 0 },
+            states: {
+                empty: {
+                    on: {
+                        ADD_TO_CART: {
+                            target: 'inCart',
+                            actions: 'addItem'
+                        }
+                    }
+                },
+                inCart: {
+                    on: {
+                        ADD_TO_CART: { actions: 'addItem' },
+                        CHECKOUT: 'checkout',
+                        RESET: {
+                            target: 'empty',
+                            actions: 'resetCart'
+                        }
+                    }
+                },
+                checkout: {
+                    on: {
+                        CONFIRM: 'confirmed',
+                        CANCEL: 'cancelled'
+                    }
+                },
+                confirmed: {
+                    on: {
+                        RESET: {
+                            target: 'empty',
+                            actions: 'resetCart'
+                        }
+                    }
+                },
+                cancelled: {
+                    on: {
+                        RESET: {
+                            target: 'empty',
+                            actions: 'resetCart'
+                        }
+                    }
+                }
+            }
+        }, {
+            actions: {
+                addItem: assign({ itemCount: ctx => ctx.itemCount + 1 }),
+                resetCart: assign({ itemCount: 0 })
+            }
+        });
+
+        let state = orderMachine.initialState;
+        
+        function updateUI() {
+            const statusMap = {
+                empty: '장바구니 비어있음',
+                inCart: '장바구니에 상품 있음',
+                checkout: '결제 진행중',
+                confirmed: '주문 완료',
+                cancelled: '주문 취소됨'
+            };
+            
+            document.getElementById('orderStatus').textContent = statusMap[state.value];
+            document.getElementById('itemCount').textContent = state.context.itemCount;
+            
+            // 버튼 활성화 관리
+            document.getElementById('addToCartBtn').disabled = state.matches('checkout') || state.matches('confirmed');
+            document.getElementById('checkoutBtn').disabled = !state.matches('inCart');
+            document.getElementById('confirmBtn').disabled = !state.matches('checkout');
+            document.getElementById('cancelBtn').disabled = !state.matches('checkout');
+        }
+
+        function send(event) {
+            state = orderMachine.transition(state, event);
+            updateUI();
+        }
+
+        document.getElementById('addToCartBtn').onclick = () => send('ADD_TO_CART');
+        document.getElementById('checkoutBtn').onclick = () => send('CHECKOUT');
+        document.getElementById('confirmBtn').onclick = () => send('CONFIRM');
+        document.getElementById('cancelBtn').onclick = () => send('CANCEL');
+        document.getElementById('resetBtn').onclick = () => send('RESET');
+        
+        updateUI();
+    </script>
+</body>
+</html>

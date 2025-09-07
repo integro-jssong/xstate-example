@@ -1,0 +1,227 @@
+<!DOCTYPE html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>Order Process 3 - 복합 주문 시스템</title>
+  </head>
+  <body>
+    <h2>Order 3. 복합 주문 시스템 (재고 확인 + 결제)</h2>
+
+    <div>
+      <button id="orderBtn">주문 시작</button>
+      <button id="retryBtn">재시도</button>
+      <button id="confirmBtn">주문 확정</button>
+    </div>
+
+    <div>
+      <p>주문 상태: <span id="status">준비</span></p>
+      <p>재고 상태: <span id="inventory">확인 필요</span></p>
+      <p>결제 상태: <span id="payment">대기</span></p>
+      <p>주문 ID: <span id="orderId">-</span></p>
+    </div>
+
+    <script src="https://unpkg.com/xstate@4.38.3/dist/xstate.js"></script>
+    <script>
+      const { createMachine, assign } = XState;
+
+      const complexOrderMachine = createMachine(
+        {
+          id: "complexOrder",
+          initial: "ready",
+          context: {
+            orderId: null,
+            inventoryChecked: false,
+            paymentProcessed: false,
+            retryCount: 0,
+          },
+          states: {
+            ready: {
+              on: { START_ORDER: "processing" },
+            },
+            processing: {
+              entry: "generateOrderId",
+              type: "parallel",
+              states: {
+                inventory: {
+                  initial: "checking",
+                  states: {
+                    checking: {
+                      invoke: {
+                        src: () =>
+                          new Promise((resolve, reject) => {
+                            setTimeout(() => {
+                              Math.random() > 0.3
+                                ? resolve()
+                                : reject("재고부족");
+                            }, 1500);
+                          }),
+                        onDone: {
+                          target: "available",
+                          actions: assign({ inventoryChecked: true }),
+                        },
+                        onError: "unavailable",
+                      },
+                    },
+                    available: { type: "final" },
+                    unavailable: { type: "final" },
+                  },
+                },
+                payment: {
+                  initial: "processing",
+                  states: {
+                    processing: {
+                      invoke: {
+                        src: () =>
+                          new Promise((resolve, reject) => {
+                            setTimeout(() => {
+                              Math.random() > 0.2
+                                ? resolve()
+                                : reject("결제실패");
+                            }, 2000);
+                          }),
+                        onDone: {
+                          target: "completed",
+                          actions: assign({ paymentProcessed: true }),
+                        },
+                        onError: "failed",
+                      },
+                    },
+                    completed: { type: "final" },
+                    failed: { type: "final" },
+                  },
+                },
+              },
+              onDone: [
+                {
+                  target: "success",
+                  guard: "bothSuccessful",
+                },
+                {
+                  target: "failed",
+                  actions: "incrementRetry",
+                },
+              ],
+            },
+            success: {
+              on: {
+                CONFIRM: {
+                  target: "confirmed",
+                  actions: "resetContext",
+                },
+              },
+            },
+            failed: {
+              on: {
+                RETRY: {
+                  target: "processing",
+                  guard: "canRetry",
+                  actions: "resetProcessing",
+                },
+                START_ORDER: {
+                  target: "ready",
+                  actions: "resetContext",
+                },
+              },
+            },
+            confirmed: {
+              type: "final",
+            },
+          },
+        },
+        {
+          guards: {
+            bothSuccessful: (context, event) =>
+              context.inventoryChecked && context.paymentProcessed,
+            canRetry: (context) => context.retryCount < 3,
+          },
+          actions: {
+            generateOrderId: assign({
+              orderId: () => "ORD" + Date.now().toString().substr(-6),
+            }),
+            incrementRetry: assign({
+              retryCount: (context) => context.retryCount + 1,
+            }),
+            resetProcessing: assign({
+              inventoryChecked: false,
+              paymentProcessed: false,
+            }),
+            resetContext: assign({
+              orderId: null,
+              inventoryChecked: false,
+              paymentProcessed: false,
+              retryCount: 0,
+            }),
+          },
+        }
+      );
+
+      let state = complexOrderMachine.initialState;
+
+      function updateUI() {
+        const statusMap = {
+          ready: "준비",
+          processing: "처리중",
+          success: "처리 완료",
+          failed: "처리 실패",
+          confirmed: "주문 확정",
+        };
+
+        document.getElementById("status").textContent =
+          statusMap[state.value] || state.value;
+
+        // 재고 상태
+        if (state.matches("processing")) {
+          if (state.matches({ processing: { inventory: "checking" } })) {
+            document.getElementById("inventory").textContent = "확인중...";
+          } else if (
+            state.matches({ processing: { inventory: "available" } })
+          ) {
+            document.getElementById("inventory").textContent = "재고 있음 ✓";
+          } else if (
+            state.matches({ processing: { inventory: "unavailable" } })
+          ) {
+            document.getElementById("inventory").textContent = "재고 부족 ✗";
+          }
+        } else {
+          document.getElementById("inventory").textContent = "확인 필요";
+        }
+
+        // 결제 상태
+        if (state.matches("processing")) {
+          if (state.matches({ processing: { payment: "processing" } })) {
+            document.getElementById("payment").textContent = "결제중...";
+          } else if (state.matches({ processing: { payment: "completed" } })) {
+            document.getElementById("payment").textContent = "결제 완료 ✓";
+          } else if (state.matches({ processing: { payment: "failed" } })) {
+            document.getElementById("payment").textContent = "결제 실패 ✗";
+          }
+        } else {
+          document.getElementById("payment").textContent = "대기";
+        }
+
+        document.getElementById("orderId").textContent =
+          state.context.orderId || "-";
+
+        // 버튼 활성화
+        document.getElementById("orderBtn").disabled =
+          !state.matches("ready") && !state.matches("failed");
+        document.getElementById("retryBtn").disabled =
+          !state.matches("failed") || state.context.retryCount >= 3;
+        document.getElementById("confirmBtn").disabled =
+          !state.matches("success");
+      }
+
+      function send(event) {
+        state = complexOrderMachine.transition(state, event);
+        updateUI();
+      }
+
+      document.getElementById("orderBtn").onclick = () => send("START_ORDER");
+      document.getElementById("retryBtn").onclick = () => send("RETRY");
+      document.getElementById("confirmBtn").onclick = () => send("CONFIRM");
+
+      updateUI();
+    </script>
+  </body>
+</html>

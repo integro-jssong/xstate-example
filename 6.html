@@ -1,0 +1,95 @@
+<!DOCTYPE html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>XState Hierarchical States (중첩 상태)</title>
+  </head>
+  <body>
+    <h2>6. Hierarchical States - 중첩된 상태</h2>
+    <button id="powerBtn">전원</button>
+    <button id="playBtn">재생/정지</button>
+    <button id="nextBtn">다음곡</button>
+
+    <div style="margin: 20px 0">
+      <p>전원: <span id="power">꺼짐</span></p>
+      <p>재생: <span id="playback">정지</span></p>
+      <p>곡번호: <span id="track">1</span></p>
+    </div>
+
+    <script src="https://unpkg.com/xstate@4.38.3/dist/xstate.js"></script>
+    <script>
+      const { createMachine, assign } = XState;
+
+      const playerMachine = createMachine({
+        id: "player",
+        initial: "powerOff",
+        context: { trackNumber: 1 },
+        states: {
+          powerOff: {
+            on: { POWER: "powerOn" },
+          },
+          powerOn: {
+            initial: "stopped",
+            on: { POWER: "powerOff" },
+            states: {
+              stopped: {
+                on: { PLAY: "playing" },
+              },
+              playing: {
+                on: {
+                  PLAY: "stopped",
+                  NEXT: {
+                    actions: assign({
+                      trackNumber: (ctx) => ctx.trackNumber + 1,
+                    }),
+                  },
+                },
+              },
+            },
+          },
+        },
+      });
+
+      let state = playerMachine.initialState;
+
+      function updateUI() {
+        // 전원 상태
+        document.getElementById("power").textContent = state.matches("powerOff")
+          ? "꺼짐"
+          : "켜짐";
+
+        // 재생 상태 (전원이 켜져있을 때만)
+        if (state.matches("powerOn")) {
+          document.getElementById("playback").textContent = state.matches(
+            "powerOn.playing"
+          )
+            ? "재생중"
+            : "정지";
+        } else {
+          document.getElementById("playback").textContent = "정지";
+        }
+
+        // 트랙 번호
+        document.getElementById("track").textContent =
+          state.context.trackNumber;
+
+        // 버튼 활성화/비활성화
+        document.getElementById("playBtn").disabled = state.matches("powerOff");
+        document.getElementById("nextBtn").disabled =
+          !state.matches("powerOn.playing");
+      }
+
+      function send(event) {
+        state = playerMachine.transition(state, event);
+        updateUI();
+      }
+
+      document.getElementById("powerBtn").onclick = () => send("POWER");
+      document.getElementById("playBtn").onclick = () => send("PLAY");
+      document.getElementById("nextBtn").onclick = () => send("NEXT");
+
+      updateUI();
+    </script>
+  </body>
+</html>

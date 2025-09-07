@@ -1,0 +1,208 @@
+<!DOCTYPE html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>Sale Order 2 - 재고 확인 및 출고 처리</title>
+  </head>
+  <body>
+    <h2>Sale Order 2. 재고 확인 및 출고 처리</h2>
+
+    <div>
+      <button id="approveBtn">주문 승인</button>
+      <button id="allocateBtn">재고 할당</button>
+      <button id="pickBtn">피킹 완료</button>
+      <button id="shipBtn">출고 완료</button>
+      <button id="invoiceBtn">송장 발행</button>
+    </div>
+
+    <div>
+      <p>주문 상태: <span id="status">승인됨</span></p>
+      <p>주문 번호: <span id="orderNo">SO202500001</span></p>
+      <p>재고 상태: <span id="inventory">확인 필요</span></p>
+      <p>할당 수량: <span id="allocated">0 / 100</span></p>
+      <p>피킹 상태: <span id="picking">대기</span></p>
+      <p>송장 번호: <span id="invoice">-</span></p>
+    </div>
+
+    <script src="https://unpkg.com/xstate@5/dist/xstate.js"></script>
+    <script>
+      const { createMachine, assign } = XState;
+
+      const fulfillmentMachine = createMachine(
+        {
+          id: "fulfillment",
+          initial: "approved",
+          context: {
+            orderNo: "SO202500001",
+            totalQty: 100,
+            allocatedQty: 0,
+            pickedQty: 0,
+            invoiceNo: null,
+          },
+          states: {
+            approved: {
+              on: {
+                ALLOCATE: "allocatingStock",
+              },
+            },
+            allocatingStock: {
+              invoke: {
+                src: () =>
+                  new Promise((resolve, reject) => {
+                    setTimeout(() => {
+                      Math.random() > 0.2
+                        ? resolve({ allocated: 100 })
+                        : reject("재고 부족");
+                    }, 1500);
+                  }),
+                onDone: {
+                  target: "stockAllocated",
+                  actions: assign({
+                    allocatedQty: (_, event) => event.data.allocated,
+                  }),
+                },
+                onError: "stockShortage",
+              },
+            },
+            stockAllocated: {
+              on: {
+                PICK: "picking",
+              },
+            },
+            picking: {
+              invoke: {
+                src: () =>
+                  new Promise((resolve) => {
+                    setTimeout(() => resolve({ picked: 100 }), 2000);
+                  }),
+                onDone: {
+                  target: "picked",
+                  actions: assign({
+                    pickedQty: (_, event) => event.data.picked,
+                  }),
+                },
+              },
+            },
+            picked: {
+              on: {
+                SHIP: "shipping",
+              },
+            },
+            shipping: {
+              invoke: {
+                src: () =>
+                  new Promise((resolve) => {
+                    setTimeout(() => resolve(), 1000);
+                  }),
+                onDone: "shipped",
+              },
+            },
+            shipped: {
+              on: {
+                INVOICE: {
+                  target: "invoiced",
+                  actions: "generateInvoice",
+                },
+              },
+            },
+            invoiced: {
+              type: "final",
+            },
+            stockShortage: {
+              on: {
+                ALLOCATE: "allocatingStock",
+              },
+            },
+          },
+        },
+        {
+          actions: {
+            generateInvoice: assign({
+              invoiceNo: () => "INV" + Date.now().toString().substr(-6),
+            }),
+          },
+        }
+      );
+
+      let state = fulfillmentMachine.initialState;
+
+      function updateUI() {
+        const statusMap = {
+          approved: "승인됨",
+          allocatingStock: "재고 할당중...",
+          stockAllocated: "재고 할당 완료",
+          picking: "피킹중...",
+          picked: "피킹 완료",
+          shipping: "출고중...",
+          shipped: "출고 완료",
+          invoiced: "송장 발행 완료",
+          stockShortage: "재고 부족",
+        };
+
+        document.getElementById("status").textContent = statusMap[state.value];
+        document.getElementById("orderNo").textContent = state.context.orderNo;
+
+        // 재고 상태
+        if (state.matches("allocatingStock")) {
+          document.getElementById("inventory").textContent = "확인중...";
+        } else if (
+          state.matches("stockAllocated") ||
+          state.matches("picked") ||
+          state.matches("shipped") ||
+          state.matches("invoiced")
+        ) {
+          document.getElementById("inventory").textContent = "할당 완료 ✓";
+        } else if (state.matches("stockShortage")) {
+          document.getElementById("inventory").textContent = "재고 부족 ✗";
+        } else {
+          document.getElementById("inventory").textContent = "확인 필요";
+        }
+
+        // 할당 수량
+        document.getElementById(
+          "allocated"
+        ).textContent = `${state.context.allocatedQty} / ${state.context.totalQty}`;
+
+        // 피킹 상태
+        if (state.matches("picking")) {
+          document.getElementById("picking").textContent = "피킹중...";
+        } else if (
+          state.matches("picked") ||
+          state.matches("shipped") ||
+          state.matches("invoiced")
+        ) {
+          document.getElementById("picking").textContent = "완료 ✓";
+        } else {
+          document.getElementById("picking").textContent = "대기";
+        }
+
+        // 송장 번호
+        document.getElementById("invoice").textContent =
+          state.context.invoiceNo || "-";
+
+        // 버튼 활성화
+        document.getElementById("approveBtn").style.display = "none"; // 이미 승인된 상태
+        document.getElementById("allocateBtn").disabled =
+          !state.matches("approved") && !state.matches("stockShortage");
+        document.getElementById("pickBtn").disabled =
+          !state.matches("stockAllocated");
+        document.getElementById("shipBtn").disabled = !state.matches("picked");
+        document.getElementById("invoiceBtn").disabled =
+          !state.matches("shipped");
+      }
+
+      function send(event) {
+        state = fulfillmentMachine.transition(state, event);
+        updateUI();
+      }
+
+      document.getElementById("allocateBtn").onclick = () => send("ALLOCATE");
+      document.getElementById("pickBtn").onclick = () => send("PICK");
+      document.getElementById("shipBtn").onclick = () => send("SHIP");
+      document.getElementById("invoiceBtn").onclick = () => send("INVOICE");
+
+      updateUI();
+    </script>
+  </body>
+</html>

@@ -1,0 +1,80 @@
+<!DOCTYPE html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>XState Guards (조건부 전환)</title>
+  </head>
+  <body>
+    <h2>4. Guards - 조건부 상태 전환</h2>
+    <button id="incrementBtn">증가 (+1)</button>
+    <button id="resetBtn">리셋</button>
+    <p>카운터: <span id="counter">0</span></p>
+    <p>상태: <span id="status">허용됨</span></p>
+
+    <script src="https://unpkg.com/xstate@4.38.3/dist/xstate.js"></script>
+    <script>
+      const { createMachine, assign } = XState;
+
+      const counterMachine = createMachine(
+        {
+          id: "counter",
+          initial: "allowed",
+          context: { count: 0 },
+          states: {
+            allowed: {
+              on: {
+                INCREMENT: {
+                  target: "blocked",
+                  guard: "isAtLimit",
+                  actions: "increment",
+                },
+                INCREMENT: {
+                  actions: "increment",
+                },
+                RESET: {
+                  actions: "reset",
+                },
+              },
+            },
+            blocked: {
+              on: {
+                RESET: {
+                  target: "allowed",
+                  actions: "reset",
+                },
+              },
+            },
+          },
+        },
+        {
+          guards: {
+            isAtLimit: (context) => context.count >= 4,
+          },
+          actions: {
+            increment: assign({ count: (context) => context.count + 1 }),
+            reset: assign({ count: 0 }),
+          },
+        }
+      );
+
+      let state = counterMachine.initialState;
+
+      function updateUI() {
+        document.getElementById("counter").textContent = state.context.count;
+        document.getElementById("status").textContent =
+          state.value === "blocked" ? "차단됨 (5 이상)" : "허용됨";
+      }
+
+      function send(event) {
+        state = counterMachine.transition(state, event);
+        updateUI();
+      }
+
+      document.getElementById("incrementBtn").onclick = () => send("INCREMENT");
+      document.getElementById("resetBtn").onclick = () => send("RESET");
+
+      updateUI();
+    </script>
+  </body>
+</html>
