@@ -1,0 +1,144 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>Document</title>
+  </head>
+  <body>
+    <button id="toggleButton">토글</button>
+    <p>상태: <span id="status">꺼짐</span></p>
+
+    <script src="https://unpkg.com/xstate@4.38.3/dist/xstate.js"></script>
+    <script>
+      console.log("XState:", typeof XState); // 디버깅용
+      const { createMachine, assign } = XState;
+
+      // 상태 머신 정의
+      const toggleMachine = createMachine(
+        {
+          id: "toggle",
+          initial: "inactive",
+          context: {
+            clickCount: 0,
+            lastToggleTime: null,
+          },
+          states: {
+            inactive: {
+              entry: ["logInactive", "updatePage"],
+              on: {
+                TOGGLE: {
+                  target: "active",
+                  actions: [
+                    "logToggleToActive",
+                    "incrementCounter",
+                    "logClickCount",
+                  ],
+                },
+              },
+            },
+            active: {
+              entry: ["logActive", "updatePage"],
+              on: {
+                TOGGLE: {
+                  target: "inactive",
+                  actions: [
+                    "logToggleToInactive",
+                    "incrementCounter",
+                    "logClickCount",
+                  ],
+                },
+              },
+            },
+          },
+        },
+        {
+          actions: {
+            // 파라미터 없는 액션
+            logInactive: () => console.log("🔴 비활성 상태로 진입"),
+            logActive: () => console.log("🟢 활성 상태로 진입"),
+
+            // 파라미터를 사용하는 액션들
+            logToggleToActive: (context, event) => {
+              console.log("➡️ 활성화로 전환 중...", {
+                clickCount: context.clickCount,
+                eventType: event.type,
+                timestamp: new Date().toLocaleTimeString(),
+              });
+            },
+
+            logToggleToInactive: (context, event) => {
+              console.log("⬅️ 비활성화로 전환 중...", {
+                clickCount: context.clickCount,
+                eventType: event.type,
+                timestamp: new Date().toLocaleTimeString(),
+              });
+            },
+
+            incrementCounter: assign({
+              clickCount: (context) => context.clickCount + 1,
+              lastToggleTime: () => new Date().toISOString(),
+            }),
+
+            logClickCount: (context) => {
+              console.log(`🔢 클릭 횟수: ${context.clickCount + 1}회`);
+            },
+
+            updatePage: (context, event, { state }) => {
+              console.log("📄 페이지 업데이트:", {
+                currentState: state ? state.value : currentState,
+                context: context,
+                eventType: event ? event.type : "init",
+              });
+
+              const statusElement = document.getElementById("status");
+              if (statusElement) {
+                const stateValue = state ? state.value : currentState;
+                statusElement.textContent = `${stateValue === "active" ? "켜짐" : "꺼짐"} (${context.clickCount}회)`;
+              }
+            },
+          },
+        },
+      );
+
+      // 현재 상태를 변수로 관리
+      let currentState = toggleMachine.initial;
+      let currentContext = toggleMachine.context;
+
+      // 상태 업데이트 함수
+      function updateState(event) {
+        console.log("이벤트 발생:", event);
+
+        // XState v4에서는 상태값(문자열)과 컨텍스트를 분리해서 전달
+        const transition = toggleMachine.transition(currentState, event);
+        console.log("전환 결과:", transition.value, transition.context);
+
+        // 먼저 상태와 컨텍스트를 업데이트
+        currentState = transition.value;
+        currentContext = transition.context;
+
+        // 그 다음 action 실행 (올바른 파라미터와 함께)
+        transition.actions.forEach((action) => {
+          if (typeof action === "function") {
+            action(currentContext, { type: event }, { state: transition });
+          } else if (
+            action.type &&
+            toggleMachine.options.actions[action.type]
+          ) {
+            // 액션 함수에 올바른 파라미터들을 전달
+            toggleMachine.options.actions[action.type](
+              currentContext, // context
+              { type: event }, // event
+              { state: transition }, // meta
+            );
+          }
+        });
+      }
+
+      // 버튼 클릭 이벤트
+      document.getElementById("toggleButton").addEventListener("click", () => {
+        updateState("TOGGLE");
+      });
+    </script>
+  </body>
+</html>

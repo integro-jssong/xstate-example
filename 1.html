@@ -1,0 +1,50 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>Document</title>
+  </head>
+  <body>
+    <button id="toggleButton">토글</button>
+    <p>상태: <span id="status">꺼짐</span></p>
+
+    <script src="https://unpkg.com/xstate@4.38.3/dist/xstate.js"></script>
+    <script>
+      console.log("XState:", typeof XState); // 디버깅용
+      const { createMachine } = XState;
+
+      // 상태 머신 정의
+      const toggleMachine = createMachine({
+        id: "toggle",
+        initial: "inactive",
+        states: {
+          inactive: {
+            on: { TOGGLE: "active" },
+          },
+          active: {
+            on: { TOGGLE: "inactive" },
+          },
+        },
+      });
+
+      // 현재 상태를 변수로 관리
+      let currentState = toggleMachine.initial;
+
+      // 상태 업데이트 함수
+      function updateState(event) {
+        console.log("이벤트 발생:", event);
+        transition = toggleMachine.transition(currentState, event);
+        console.log("현재 상태:", transition.value);
+        currentState = transition.value;
+        document.getElementById("status").textContent =
+          currentState === "active" ? "켜짐" : "꺼짐";
+      }
+
+      // 버튼 클릭 이벤트
+      document.getElementById("toggleButton").addEventListener("click", () => {
+        updateState("TOGGLE");
+      });
+    </script>
+  </body>
+</html>

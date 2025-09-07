@@ -1,0 +1,96 @@
+<!DOCTYPE html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>Document</title>
+  </head>
+  <body>
+    <button id="toggleButton">토글</button>
+    <p>상태: <span id="status">꺼짐</span></p>
+
+    <script src="https://unpkg.com/xstate@4.38.3/dist/xstate.js"></script>
+    <script>
+      console.log("XState:", typeof XState); // 디버깅용
+      const { createMachine } = XState;
+
+      // 상태 머신 정의
+      const toggleMachine = createMachine(
+        {
+          id: "toggle",
+          initial: "inactive",
+          states: {
+            inactive: {
+              entry: ["logInactive", "updateUI"],
+              on: {
+                TOGGLE: {
+                  target: "active",
+                  actions: ["logToggleToActive"],
+                },
+              },
+            },
+            active: {
+              entry: ["logActive", "updateUI"],
+              on: {
+                TOGGLE: {
+                  target: "inactive",
+                  actions: ["logToggleToInactive"],
+                },
+              },
+            },
+          },
+        },
+        {
+          actions: {
+            logInactive: () => console.log("🔴 비활성 상태로 진입"),
+            logActive: () => console.log("🟢 활성 상태로 진입"),
+            logToggleToActive: () => console.log("➡️ 활성화로 전환 중..."),
+            logToggleToInactive: () => console.log("⬅️ 비활성화로 전환 중..."),
+            updateUI: () => {
+              // 현재 상태에 따라 UI 업데이트
+              const statusElement = document.getElementById("status");
+              if (statusElement) {
+                statusElement.textContent =
+                  currentState === "active" ? "켜짐" : "꺼짐";
+              }
+            },
+          },
+        }
+      );
+
+      // 현재 상태를 변수로 관리
+      let currentState = toggleMachine.initial;
+
+      // 상태 업데이트 함수
+      function updateState(event) {
+        console.log("이벤트 발생:", event);
+        const transition = toggleMachine.transition(currentState, event);
+        console.log("현재 상태:", transition);
+
+        // 먼저 상태를 업데이트
+        currentState = transition.value;
+
+        // 그 다음 action 실행
+        transition.actions.forEach((action) => {
+          if (typeof action === "function") {
+            action();
+          } else if (
+            action.type &&
+            toggleMachine.options.actions[action.type]
+          ) {
+            toggleMachine.options.actions[action.type]();
+          }
+        });
+
+        // 기본 UI 업데이트 (액션에서 처리하지 않는 경우를 위해)
+        document.getElementById("status").textContent =
+          currentState === "active" ? "켜짐" : "꺼짐";
+      }
+
+      // 버튼 클릭 이벤트
+      document.getElementById("toggleButton").addEventListener("click", () => {
+        updateState("TOGGLE");
+      });
+    </script>
+  </body>
+</html>
