@@ -6,41 +6,89 @@
     <title>Document</title>
   </head>
   <body>
-    <h1>XState 학습 예제</h1>
-    <h2>기본 개념부터 고급 기능까지</h2>
+    <h1>🚀 XState 학습 가이드</h1>
+    <h2>v4 vs v5 비교 학습</h2>
 
-    <h3>🔧 기본 개념</h3>
-    <ol>
-      <li><a href="1.html">1. 기본 상태 전환 (Basic State Machine)</a></li>
-      <li><a href="2.html">2. Actions 사용 (Entry/Exit Actions)</a></li>
-      <li><a href="3.html">3. Context와 assign (상태 데이터 관리)</a></li>
-      <li><a href="4.html">4. Guards - 조건부 전환</a></li>
-      <li><a href="5.html">5. Services - 비동기 처리</a></li>
-      <li><a href="6.html">6. Hierarchical States - 중첩 상태</a></li>
-      <li><a href="7.html">7. Parallel States - 병렬 상태</a></li>
-      <li><a href="8.html">8. History States - 상태 기억</a></li>
-    </ol>
+    <div
+      style="
+        background: #f0f8ff;
+        padding: 20px;
+        margin: 20px 0;
+        border-left: 4px solid #4a90e2;
+      "
+    >
+      <h3>� 학습 방법</h3>
+      <p>
+        <strong>v4</strong>와 <strong>v5</strong>를 비교하며 XState의 발전과정을
+        이해하세요!
+      </p>
+      <ul>
+        <li>같은 기능을 v4와 v5로 구현한 차이점 학습</li>
+        <li>v5의 개선된 API와 패턴 이해</li>
+        <li>실제 프로젝트에서의 적용 방법 습득</li>
+      </ul>
+    </div>
 
-    <h3>🛒 주문 시스템 예제</h3>
-    <ol>
-      <li><a href="order1.html">Order 1. 기본 주문 흐름</a></li>
-      <li><a href="order2.html">Order 2. 결제 및 배송 상태</a></li>
-      <li><a href="order3.html">Order 3. 복합 주문 시스템</a></li>
-    </ol>
+    <div style="display: flex; gap: 40px">
+      <div style="flex: 1">
+        <h3>🔧 XState v4 (Legacy)</h3>
+        <p style="color: #666">전통적인 방식, transition 기반</p>
+        <ol>
+          <li>
+            <a href="v4/01-basic-concepts.html">기본 개념 및 상태 전환</a>
+          </li>
+          <li><a href="v4/02-order-basic.html">기본 주문 시스템</a></li>
+          <li><a href="v4/03-order-payment.html">결제 및 배송 처리</a></li>
+          <li><a href="v4/04-order-complex.html">복합 주문 시스템</a></li>
+          <li><a href="v4/05-sale-order-basic.html">ERP 판매주문 기본</a></li>
+          <li>
+            <a href="v4/06-sale-order-fulfillment.html">재고 및 출고 처리</a>
+          </li>
+          <li>
+            <a href="v4/07-sale-order-complete.html">완전한 ERP 프로세스</a>
+          </li>
+        </ol>
+      </div>
 
-    <h3>💼 ERP 판매주문 시스템</h3>
-    <ol>
-      <li>
-        <a href="sale-order1.html">Sale Order 1. 기본 판매주문 생성 및 승인</a>
-      </li>
-      <li>
-        <a href="sale-order2.html">Sale Order 2. 재고 확인 및 출고 처리</a>
-      </li>
-      <li>
-        <a href="sale-order3.html"
-          >Sale Order 3. 완전한 ERP 판매주문 프로세스</a
-        >
-      </li>
-    </ol>
+      <div style="flex: 1">
+        <h3>⚡ XState v5 (Modern)</h3>
+        <p style="color: #28a745">현대적 방식, Actor 모델 기반</p>
+        <ol>
+          <li>
+            <a href="v5/01-basic-concepts.html">기본 개념 및 상태 전환</a>
+          </li>
+          <li><a href="v5/02-order-basic.html">기본 주문 시스템</a></li>
+          <li><a href="v5/03-order-payment.html">결제 및 배송 처리</a></li>
+          <li><a href="v5/04-order-complex.html">복합 주문 시스템</a></li>
+          <li><a href="v5/05-sale-order-basic.html">ERP 판매주문 기본</a></li>
+          <li>
+            <a href="v5/06-sale-order-fulfillment.html">재고 및 출고 처리</a>
+          </li>
+          <li>
+            <a href="v5/07-sale-order-complete.html">완전한 ERP 프로세스</a>
+          </li>
+        </ol>
+      </div>
+    </div>
+
+    <div
+      style="
+        background: #fff3cd;
+        padding: 15px;
+        margin: 20px 0;
+        border-left: 4px solid #ffc107;
+      "
+    >
+      <h3>💡 주요 차이점</h3>
+      <ul>
+        <li><strong>v4</strong>: <code>createMachine + transition</code></li>
+        <li><strong>v5</strong>: <code>createMachine + createActor</code></li>
+        <li><strong>v5</strong>에서 비동기 처리가 더 안정적</li>
+        <li>
+          <strong>v5</strong>는 <code>fromPromise</code>,
+          <code>fromCallback</code> 등 명확한 API 제공
+        </li>
+      </ul>
+    </div>
   </body>
 </html>

@@ -25,10 +25,20 @@
       <p>송장 번호: <span id="invoice">-</span></p>
     </div>
 
-    <script src="https://unpkg.com/xstate@5/dist/xstate.js"></script>
-    <script>
-      const { createMachine, assign, createActor, fromPromise } = XState;
+    <script type="module">
+      import {
+        createMachine,
+        assign,
+        createActor,
+        fromPromise,
+      } from "https://cdn.skypack.dev/xstate@5";
 
+      console.log("XState v5 로드 완료:", {
+        createMachine,
+        assign,
+        createActor,
+        fromPromise,
+      });
       const fulfillmentMachine = createMachine({
         id: "fulfillment",
         initial: "approved",

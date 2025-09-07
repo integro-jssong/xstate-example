@@ -1,0 +1,238 @@
+<!DOCTYPE html>
+<html lan <script type="module">
+  import { createMachine, assign, createActor, fromPromise } from
+  'https://cdn.skypack.dev/xstate@5'; console.log('XState v5 로드 완료:', {
+  createMachine, assign, createActor, fromPromise }); // v5: fromPromise를 통한
+  명확한 비동기 처리">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>XState v5 - 복합 주문 시스템</title>
+  </head>
+  <body>
+    <h2>⚡ XState v5 - 복합 주문 시스템 (재고 확인 + 결제)</h2>
+    <p><strong>v5 핵심:</strong> fromPromise를 통한 안정적인 비동기 처리</p>
+
+    <div>
+      <button id="orderBtn">주문 시작</button>
+      <button id="retryBtn">재시도</button>
+      <button id="confirmBtn">주문 확정</button>
+    </div>
+
+    <div>
+      <p>주문 상태: <span id="status">준비</span></p>
+      <p>재고 상태: <span id="inventory">확인 필요</span></p>
+      <p>결제 상태: <span id="payment">대기</span></p>
+      <p>주문 ID: <span id="orderId">-</span></p>
+      <p>재시도 횟수: <span id="retryCount">0</span></p>
+    </div>
+
+    <script src="https://unpkg.com/xstate@5/dist/xstate.js"></script>
+    <script>
+      const { createMachine, assign, createActor, fromPromise } = XState;
+
+      // v5: fromPromise를 통한 명확한 비동기 처리
+      const checkInventory = fromPromise(
+        () =>
+          new Promise((resolve, reject) => {
+            setTimeout(() => {
+              Math.random() > 0.3 ? resolve() : reject("재고부족");
+            }, 1500);
+          })
+      );
+
+      const processPayment = fromPromise(
+        () =>
+          new Promise((resolve, reject) => {
+            setTimeout(() => {
+              Math.random() > 0.2 ? resolve() : reject("결제실패");
+            }, 2000);
+          })
+      );
+
+      const complexOrderMachine = createMachine({
+        id: "complexOrder",
+        initial: "ready",
+        context: {
+          orderId: null,
+          inventoryChecked: false,
+          paymentProcessed: false,
+          retryCount: 0,
+        },
+        states: {
+          ready: {
+            on: { START_ORDER: "processing" },
+          },
+          processing: {
+            entry: assign({
+              orderId: () => "ORD" + Date.now().toString().substr(-6),
+              inventoryChecked: false,
+              paymentProcessed: false,
+            }),
+            type: "parallel",
+            states: {
+              inventory: {
+                initial: "checking",
+                states: {
+                  checking: {
+                    invoke: {
+                      src: checkInventory,
+                      onDone: {
+                        target: "available",
+                        actions: assign({ inventoryChecked: true }),
+                      },
+                      onError: "unavailable",
+                    },
+                  },
+                  available: { type: "final" },
+                  unavailable: { type: "final" },
+                },
+              },
+              payment: {
+                initial: "processing",
+                states: {
+                  processing: {
+                    invoke: {
+                      src: processPayment,
+                      onDone: {
+                        target: "completed",
+                        actions: assign({ paymentProcessed: true }),
+                      },
+                      onError: "failed",
+                    },
+                  },
+                  completed: { type: "final" },
+                  failed: { type: "final" },
+                },
+              },
+            },
+            onDone: [
+              {
+                target: "success",
+                guard: ({ context }) =>
+                  context.inventoryChecked && context.paymentProcessed,
+              },
+              {
+                target: "failed",
+                actions: assign({
+                  retryCount: ({ context }) => context.retryCount + 1,
+                }),
+              },
+            ],
+          },
+          success: {
+            on: {
+              CONFIRM: {
+                target: "confirmed",
+                actions: assign({
+                  orderId: null,
+                  inventoryChecked: false,
+                  paymentProcessed: false,
+                  retryCount: 0,
+                }),
+              },
+            },
+          },
+          failed: {
+            on: {
+              RETRY: {
+                target: "processing",
+                guard: ({ context }) => context.retryCount < 3,
+              },
+              START_ORDER: {
+                target: "ready",
+                actions: assign({
+                  orderId: null,
+                  inventoryChecked: false,
+                  paymentProcessed: false,
+                  retryCount: 0,
+                }),
+              },
+            },
+          },
+          confirmed: {
+            type: "final",
+          },
+        },
+      });
+
+      const actor = createActor(complexOrderMachine);
+      actor.start();
+
+      function updateUI() {
+        const currentState = actor.getSnapshot();
+
+        const statusMap = {
+          ready: "준비",
+          processing: "처리중",
+          success: "처리 완료",
+          failed: "처리 실패",
+          confirmed: "주문 확정",
+        };
+
+        document.getElementById("status").textContent =
+          statusMap[currentState.value] || currentState.value;
+
+        // 재고 상태
+        if (currentState.matches("processing")) {
+          if (currentState.matches({ processing: { inventory: "checking" } })) {
+            document.getElementById("inventory").textContent = "확인중...";
+          } else if (
+            currentState.matches({ processing: { inventory: "available" } })
+          ) {
+            document.getElementById("inventory").textContent = "재고 있음 ✓";
+          } else if (
+            currentState.matches({ processing: { inventory: "unavailable" } })
+          ) {
+            document.getElementById("inventory").textContent = "재고 부족 ✗";
+          }
+        } else {
+          document.getElementById("inventory").textContent = "확인 필요";
+        }
+
+        // 결제 상태
+        if (currentState.matches("processing")) {
+          if (currentState.matches({ processing: { payment: "processing" } })) {
+            document.getElementById("payment").textContent = "결제중...";
+          } else if (
+            currentState.matches({ processing: { payment: "completed" } })
+          ) {
+            document.getElementById("payment").textContent = "결제 완료 ✓";
+          } else if (
+            currentState.matches({ processing: { payment: "failed" } })
+          ) {
+            document.getElementById("payment").textContent = "결제 실패 ✗";
+          }
+        } else {
+          document.getElementById("payment").textContent = "대기";
+        }
+
+        document.getElementById("orderId").textContent =
+          currentState.context.orderId || "-";
+        document.getElementById("retryCount").textContent =
+          currentState.context.retryCount;
+
+        // 버튼 활성화
+        document.getElementById("orderBtn").disabled =
+          !currentState.matches("ready") && !currentState.matches("failed");
+        document.getElementById("retryBtn").disabled =
+          !currentState.matches("failed") ||
+          currentState.context.retryCount >= 3;
+        document.getElementById("confirmBtn").disabled =
+          !currentState.matches("success");
+      }
+
+      actor.subscribe(updateUI);
+
+      function send(event) {
+        actor.send({ type: event });
+      }
+
+      document.getElementById("orderBtn").onclick = () => send("START_ORDER");
+      document.getElementById("retryBtn").onclick = () => send("RETRY");
+      document.getElementById("confirmBtn").onclick = () => send("CONFIRM");
+
+      updateUI();
+    </script>
+  </body>
+</html>

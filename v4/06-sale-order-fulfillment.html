@@ -47,15 +47,14 @@
           },
           allocatingStock: {
             invoke: {
-              src: fromPromise(
-                () =>
-                  new Promise((resolve, reject) => {
-                    setTimeout(() => {
-                      Math.random() > 0.2
-                        ? resolve({ allocated: 100 })
-                        : reject("재고 부족");
-                    }, 1500);
-                  })
+              src: fromPromise(() =>
+                new Promise((resolve, reject) => {
+                  setTimeout(() => {
+                    Math.random() > 0.2
+                      ? resolve({ allocated: 100 })
+                      : reject("재고 부족");
+                  }, 1500);
+                })
               ),
               onDone: {
                 target: "stockAllocated",
@@ -73,11 +72,10 @@
           },
           picking: {
             invoke: {
-              src: fromPromise(
-                () =>
-                  new Promise((resolve) => {
-                    setTimeout(() => resolve({ picked: 100 }), 2000);
-                  })
+              src: fromPromise(() =>
+                new Promise((resolve) => {
+                  setTimeout(() => resolve({ picked: 100 }), 2000);
+                })
               ),
               onDone: {
                 target: "picked",
@@ -94,11 +92,10 @@
           },
           shipping: {
             invoke: {
-              src: fromPromise(
-                () =>
-                  new Promise((resolve) => {
-                    setTimeout(() => resolve(), 1000);
-                  })
+              src: fromPromise(() =>
+                new Promise((resolve) => {
+                  setTimeout(() => resolve(), 1000);
+                })
               ),
               onDone: "shipped",
             },
@@ -130,7 +127,7 @@
 
       function updateUI() {
         const currentState = actor.getSnapshot();
-
+        
         const statusMap = {
           approved: "승인됨",
           allocatingStock: "재고 할당중...",
@@ -143,10 +140,8 @@
           stockShortage: "재고 부족",
         };
 
-        document.getElementById("status").textContent =
-          statusMap[currentState.value];
-        document.getElementById("orderNo").textContent =
-          currentState.context.orderNo;
+        document.getElementById("status").textContent = statusMap[currentState.value];
+        document.getElementById("orderNo").textContent = currentState.context.orderNo;
 
         // 재고 상태
         if (currentState.matches("allocatingStock")) {
@@ -189,12 +184,10 @@
         // 버튼 활성화
         document.getElementById("approveBtn").style.display = "none";
         document.getElementById("allocateBtn").disabled =
-          !currentState.matches("approved") &&
-          !currentState.matches("stockShortage");
+          !currentState.matches("approved") && !currentState.matches("stockShortage");
         document.getElementById("pickBtn").disabled =
           !currentState.matches("stockAllocated");
-        document.getElementById("shipBtn").disabled =
-          !currentState.matches("picked");
+        document.getElementById("shipBtn").disabled = !currentState.matches("picked");
         document.getElementById("invoiceBtn").disabled =
           !currentState.matches("shipped");
       }

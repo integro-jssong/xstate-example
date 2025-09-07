@@ -1,0 +1,140 @@
+<!DOCTYPE html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>XState v5 - 기본 개념</title>
+  </head>
+  <body>
+    <h2>📚 XState v5 - 기본 개념 및 상태 전환</h2>
+    <p><strong>v5의 특징:</strong> createActor, Actor 모델, 개선된 API</p>
+
+    <div>
+      <button id="addToCartBtn">장바구니 담기</button>
+      <button id="checkoutBtn">결제하기</button>
+      <button id="confirmBtn">주문확인</button>
+      <button id="cancelBtn">주문취소</button>
+      <button id="resetBtn">처음부터</button>
+    </div>
+
+    <div>
+      <p>주문 상태: <span id="orderStatus">장바구니 비어있음</span></p>
+      <p>상품 수량: <span id="itemCount">0</span></p>
+    </div>
+
+    <script type="module">
+      import {
+        createMachine,
+        assign,
+        createActor,
+      } from "https://cdn.skypack.dev/xstate@5";
+
+      console.log("XState v5 로드 완료:", {
+        createMachine,
+        assign,
+        createActor,
+      });
+
+      const orderMachine = createMachine({
+        id: "order",
+        initial: "empty",
+        context: { itemCount: 0 },
+        states: {
+          empty: {
+            on: {
+              ADD_TO_CART: {
+                target: "inCart",
+                actions: assign({
+                  itemCount: ({ context }) => context.itemCount + 1,
+                }),
+              },
+            },
+          },
+          inCart: {
+            on: {
+              ADD_TO_CART: {
+                actions: assign({
+                  itemCount: ({ context }) => context.itemCount + 1,
+                }),
+              },
+              CHECKOUT: "checkout",
+              RESET: {
+                target: "empty",
+                actions: assign({ itemCount: 0 }),
+              },
+            },
+          },
+          checkout: {
+            on: {
+              CONFIRM: "confirmed",
+              CANCEL: "cancelled",
+            },
+          },
+          confirmed: {
+            on: {
+              RESET: {
+                target: "empty",
+                actions: assign({ itemCount: 0 }),
+              },
+            },
+          },
+          cancelled: {
+            on: {
+              RESET: {
+                target: "empty",
+                actions: assign({ itemCount: 0 }),
+              },
+            },
+          },
+        },
+      });
+
+      // v5: createActor 사용
+      const actor = createActor(orderMachine);
+      actor.start();
+
+      function updateUI() {
+        const currentState = actor.getSnapshot();
+
+        const statusMap = {
+          empty: "장바구니 비어있음",
+          inCart: "장바구니에 상품 있음",
+          checkout: "결제 진행중",
+          confirmed: "주문 완료",
+          cancelled: "주문 취소됨",
+        };
+
+        document.getElementById("orderStatus").textContent =
+          statusMap[currentState.value];
+        document.getElementById("itemCount").textContent =
+          currentState.context.itemCount;
+
+        // 버튼 활성화 관리
+        document.getElementById("addToCartBtn").disabled =
+          currentState.matches("checkout") || currentState.matches("confirmed");
+        document.getElementById("checkoutBtn").disabled =
+          !currentState.matches("inCart");
+        document.getElementById("confirmBtn").disabled =
+          !currentState.matches("checkout");
+        document.getElementById("cancelBtn").disabled =
+          !currentState.matches("checkout");
+      }
+
+      // v5: actor.subscribe로 상태 변화 감지
+      actor.subscribe(updateUI);
+
+      function send(event) {
+        actor.send({ type: event });
+      }
+
+      document.getElementById("addToCartBtn").onclick = () =>
+        send("ADD_TO_CART");
+      document.getElementById("checkoutBtn").onclick = () => send("CHECKOUT");
+      document.getElementById("confirmBtn").onclick = () => send("CONFIRM");
+      document.getElementById("cancelBtn").onclick = () => send("CANCEL");
+      document.getElementById("resetBtn").onclick = () => send("RESET");
+
+      updateUI();
+    </script>
+  </body>
+</html>

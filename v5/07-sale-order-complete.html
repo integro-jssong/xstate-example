@@ -1,0 +1,309 @@
+<!DOCTYPE html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>XState v5 - 완전한 ERP 판매주문</title>
+  </head>
+  <body>
+    <h2>🏢 XState v5 - 완전한 ERP 판매주문 프로세스</h2>
+    <p><strong>v5 핵심:</strong> fromPromise, 병렬 처리, 강력한 guard 시스템</p>
+
+    <div>
+      <button id="createBtn">주문 생성</button>
+      <button id="creditBtn">신용 체크</button>
+      <button id="processBtn">주문 처리 시작</button>
+      <button id="confirmBtn">배송 확인</button>
+      <button id="paymentBtn">수금 완료</button>
+    </div>
+
+    <div>
+      <h3>주문 정보</h3>
+      <p>주문 번호: <span id="orderNo">-</span></p>
+      <p>고객: <span id="customer">대한상사</span></p>
+      <p>주문 금액: <span id="amount">₩5,000,000</span></p>
+
+      <h3>프로세스 상태</h3>
+      <p>📋 주문 상태: <span id="orderStatus">신규</span></p>
+      <p>💳 신용 체크: <span id="creditStatus">대기</span></p>
+      <p>📦 물류 상태: <span id="logisticsStatus">대기</span></p>
+      <p>💰 수금 상태: <span id="paymentStatus">대기</span></p>
+
+      <h3>세부 정보</h3>
+      <p>신용 한도: <span id="creditLimit">₩10,000,000</span></p>
+      <p>재고 할당: <span id="stockStatus">미할당</span></p>
+      <p>배송지: <span id="delivery">서울시 강남구</span></p>
+      <p>결제 조건: <span id="terms">NET 30</span></p>
+    </div>
+
+    <script type="module">
+      import {
+        createMachine,
+        assign,
+        createActor,
+        fromPromise,
+      } from "https://cdn.skypack.dev/xstate@5";
+
+      console.log("XState v5 로드 완료:", {
+        createMachine,
+        assign,
+        createActor,
+        fromPromise,
+      }); // v5: fromPromise로 명확한 비동기 처리
+      const checkCredit = fromPromise(
+        ({ input: { amount, creditLimit } }) =>
+          new Promise((resolve, reject) => {
+            setTimeout(() => {
+              if (amount <= creditLimit) {
+                resolve({ approved: true });
+              } else {
+                reject("신용 한도 초과");
+              }
+            }, 2000);
+          })
+      );
+
+      const allocateStock = fromPromise(
+        () => new Promise((resolve) => setTimeout(() => resolve(), 1500))
+      );
+
+      const processShipping = fromPromise(
+        () => new Promise((resolve) => setTimeout(() => resolve(), 3000))
+      );
+
+      const erpSaleOrderMachine = createMachine({
+        id: "erpSaleOrder",
+        initial: "draft",
+        context: {
+          orderNo: null,
+          customer: "대한상사",
+          amount: 5000000,
+          creditLimit: 10000000,
+          creditApproved: false,
+          stockAllocated: false,
+          shipped: false,
+          paymentReceived: false,
+        },
+        states: {
+          draft: {
+            on: {
+              CREATE: {
+                target: "created",
+                actions: assign({
+                  orderNo: () =>
+                    "SO" +
+                    new Date().getFullYear() +
+                    String(Date.now()).substr(-8),
+                }),
+              },
+            },
+          },
+          created: {
+            on: {
+              CREDIT_CHECK: "creditChecking",
+            },
+          },
+          creditChecking: {
+            invoke: {
+              src: checkCredit,
+              input: ({ context }) => ({
+                amount: context.amount,
+                creditLimit: context.creditLimit,
+              }),
+              onDone: {
+                target: "creditApproved",
+                actions: assign({ creditApproved: true }),
+              },
+              onError: "creditRejected",
+            },
+          },
+          creditApproved: {
+            on: {
+              PROCESS: "processing",
+            },
+          },
+          processing: {
+            type: "parallel",
+            states: {
+              logistics: {
+                initial: "stockAllocation",
+                states: {
+                  stockAllocation: {
+                    invoke: {
+                      src: allocateStock,
+                      onDone: {
+                        target: "shipping",
+                        actions: assign({ stockAllocated: true }),
+                      },
+                    },
+                  },
+                  shipping: {
+                    invoke: {
+                      src: processShipping,
+                      onDone: {
+                        target: "shipped",
+                        actions: assign({ shipped: true }),
+                      },
+                    },
+                  },
+                  shipped: {
+                    type: "final",
+                  },
+                },
+              },
+              finance: {
+                initial: "waitingPayment",
+                states: {
+                  waitingPayment: {
+                    on: {
+                      PAYMENT_RECEIVED: {
+                        target: "paid",
+                        actions: assign({ paymentReceived: true }),
+                      },
+                    },
+                  },
+                  paid: {
+                    type: "final",
+                  },
+                },
+              },
+            },
+            onDone: "completed",
+          },
+          completed: {
+            on: {
+              CONFIRM: "closed",
+            },
+          },
+          closed: {
+            type: "final",
+          },
+          creditRejected: {
+            on: {
+              CREATE: "draft",
+            },
+          },
+        },
+      });
+
+      const actor = createActor(erpSaleOrderMachine);
+      actor.start();
+
+      function updateUI() {
+        const currentState = actor.getSnapshot();
+
+        // 기본 정보
+        document.getElementById("orderNo").textContent =
+          currentState.context.orderNo || "-";
+        document.getElementById("customer").textContent =
+          currentState.context.customer;
+        document.getElementById(
+          "amount"
+        ).textContent = `₩${currentState.context.amount.toLocaleString()}`;
+        document.getElementById(
+          "creditLimit"
+        ).textContent = `₩${currentState.context.creditLimit.toLocaleString()}`;
+
+        // 주문 상태
+        const orderStatusMap = {
+          draft: "신규",
+          created: "생성됨",
+          creditChecking: "신용 체크중",
+          creditApproved: "신용 승인",
+          processing: "처리중",
+          completed: "처리 완료",
+          closed: "완료",
+          creditRejected: "신용 거부",
+        };
+        document.getElementById("orderStatus").textContent =
+          orderStatusMap[currentState.value] || currentState.value;
+
+        // 신용 체크 상태
+        if (currentState.matches("creditChecking")) {
+          document.getElementById("creditStatus").textContent = "확인중...";
+        } else if (currentState.context.creditApproved) {
+          document.getElementById("creditStatus").textContent = "승인 ✓";
+        } else if (currentState.matches("creditRejected")) {
+          document.getElementById("creditStatus").textContent = "거부 ✗";
+        } else {
+          document.getElementById("creditStatus").textContent = "대기";
+        }
+
+        // 물류 상태
+        if (currentState.matches("processing")) {
+          if (
+            currentState.matches({
+              processing: { logistics: "stockAllocation" },
+            })
+          ) {
+            document.getElementById("logisticsStatus").textContent =
+              "재고 할당중...";
+            document.getElementById("stockStatus").textContent = "할당중...";
+          } else if (
+            currentState.matches({ processing: { logistics: "shipping" } })
+          ) {
+            document.getElementById("logisticsStatus").textContent =
+              "배송중...";
+            document.getElementById("stockStatus").textContent = "할당 완료";
+          } else if (
+            currentState.matches({ processing: { logistics: "shipped" } })
+          ) {
+            document.getElementById("logisticsStatus").textContent =
+              "배송 완료 ✓";
+            document.getElementById("stockStatus").textContent = "할당 완료";
+          }
+        } else if (
+          currentState.matches("completed") ||
+          currentState.matches("closed")
+        ) {
+          document.getElementById("logisticsStatus").textContent = "완료 ✓";
+          document.getElementById("stockStatus").textContent = "할당 완료";
+        } else {
+          document.getElementById("logisticsStatus").textContent = "대기";
+          document.getElementById("stockStatus").textContent = "미할당";
+        }
+
+        // 수금 상태
+        if (currentState.context.paymentReceived) {
+          document.getElementById("paymentStatus").textContent = "수금 완료 ✓";
+        } else if (
+          currentState.matches("processing") ||
+          currentState.matches("completed")
+        ) {
+          document.getElementById("paymentStatus").textContent = "수금 대기";
+        } else {
+          document.getElementById("paymentStatus").textContent = "대기";
+        }
+
+        // 버튼 활성화
+        document.getElementById("createBtn").disabled =
+          !currentState.matches("draft") &&
+          !currentState.matches("creditRejected");
+        document.getElementById("creditBtn").disabled =
+          !currentState.matches("created");
+        document.getElementById("processBtn").disabled =
+          !currentState.matches("creditApproved");
+        document.getElementById("confirmBtn").disabled =
+          !currentState.matches("completed");
+        document.getElementById("paymentBtn").disabled =
+          !currentState.matches("processing") ||
+          currentState.context.paymentReceived;
+      }
+
+      actor.subscribe(updateUI);
+
+      function send(event) {
+        actor.send({ type: event });
+      }
+
+      document.getElementById("createBtn").onclick = () => send("CREATE");
+      document.getElementById("creditBtn").onclick = () => send("CREDIT_CHECK");
+      document.getElementById("processBtn").onclick = () => send("PROCESS");
+      document.getElementById("confirmBtn").onclick = () => send("CONFIRM");
+      document.getElementById("paymentBtn").onclick = () =>
+        send("PAYMENT_RECEIVED");
+
+      updateUI();
+    </script>
+  </body>
+</html>

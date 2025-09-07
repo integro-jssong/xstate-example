@@ -1,0 +1,146 @@
+<!DOCTYPE html>
+<html lan <script type="module">
+  import { createMachine, assign, createActor } from
+  'https://cdn.skypack.dev/xstate@5'; console.log('XState v5 로드 완료:', {
+  createMachine, assign, createActor }); const orderMachine = createMachine({">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>XState v5 - 결제 및 배송 처리</title>
+  </head>
+  <body>
+    <h2>🚚 XState v5 - 결제 및 배송 처리</h2>
+    <p><strong>v5 특징:</strong> 간단한 delay 처리, 명확한 Actor 패턴</p>
+
+    <div>
+      <button id="orderBtn">주문하기</button>
+      <button id="payBtn">결제하기</button>
+      <button id="shipBtn">배송시작</button>
+      <button id="deliverBtn">배송완료</button>
+      <button id="cancelBtn">주문취소</button>
+    </div>
+
+    <div>
+      <p>주문 상태: <span id="status">대기중</span></p>
+      <p>결제 금액: <span id="amount">₩0</span></p>
+      <p>배송 정보: <span id="shipping">-</span></p>
+    </div>
+
+    <script src="https://unpkg.com/xstate@5/dist/xstate.js"></script>
+    <script>
+      const { createMachine, assign, createActor } = XState;
+
+      const orderMachine = createMachine({
+        id: "orderProcess",
+        initial: "idle",
+        context: {
+          amount: 29000,
+          trackingNumber: null,
+        },
+        states: {
+          idle: {
+            on: { ORDER: "pending" },
+          },
+          pending: {
+            on: {
+              PAY: "paid",
+              CANCEL: "cancelled",
+            },
+          },
+          paid: {
+            entry: assign({
+              trackingNumber: () =>
+                "TK" + Math.random().toString().substr(2, 8),
+            }),
+            on: {
+              SHIP: "shipping",
+              CANCEL: "refunding",
+            },
+          },
+          shipping: {
+            on: {
+              DELIVER: "delivered",
+            },
+          },
+          delivered: {
+            type: "final",
+          },
+          cancelled: {
+            on: { ORDER: "pending" },
+          },
+          refunding: {
+            after: {
+              2000: "refunded", // v5의 간단한 delay
+            },
+          },
+          refunded: {
+            on: { ORDER: "pending" },
+          },
+        },
+      });
+
+      const actor = createActor(orderMachine);
+      actor.start();
+
+      function updateUI() {
+        const currentState = actor.getSnapshot();
+
+        const statusMap = {
+          idle: "대기중",
+          pending: "주문 접수",
+          paid: "결제 완료",
+          shipping: "배송중",
+          delivered: "배송 완료",
+          cancelled: "주문 취소",
+          refunding: "환불 처리중...",
+          refunded: "환불 완료",
+        };
+
+        document.getElementById("status").textContent =
+          statusMap[currentState.value];
+        document.getElementById(
+          "amount"
+        ).textContent = `₩${currentState.context.amount.toLocaleString()}`;
+
+        if (currentState.context.trackingNumber) {
+          document.getElementById(
+            "shipping"
+          ).textContent = `배송번호: ${currentState.context.trackingNumber}`;
+        } else {
+          document.getElementById("shipping").textContent = "-";
+        }
+
+        // 버튼 활성화
+        document.getElementById("orderBtn").disabled =
+          !currentState.matches("idle") &&
+          !currentState.matches("cancelled") &&
+          !currentState.matches("refunded");
+        document.getElementById("payBtn").disabled =
+          !currentState.matches("pending");
+        document.getElementById("shipBtn").disabled =
+          !currentState.matches("paid");
+        document.getElementById("deliverBtn").disabled =
+          !currentState.matches("shipping");
+        document.getElementById("cancelBtn").disabled =
+          currentState.matches("delivered") ||
+          currentState.matches("cancelled") ||
+          currentState.matches("refunded") ||
+          currentState.matches("refunding");
+      }
+
+      actor.subscribe(updateUI);
+
+      function send(event) {
+        actor.send({ type: event });
+      }
+
+      document.getElementById("orderBtn").onclick = () => send("ORDER");
+      document.getElementById("payBtn").onclick = () => send("PAY");
+      document.getElementById("shipBtn").onclick = () => send("SHIP");
+      document.getElementById("deliverBtn").onclick = () => send("DELIVER");
+      document.getElementById("cancelBtn").onclick = () => send("CANCEL");
+
+      updateUI();
+    </script>
+  </body>
+</html>

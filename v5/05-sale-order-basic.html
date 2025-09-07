@@ -1,0 +1,164 @@
+<!DOCTYPE html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>XState v5 - ERP 판매주문 기본</title>
+  </head>
+  <body>
+    <h2>💼 XState v5 - ERP 판매주문 기본</h2>
+    <p><strong>v5 장점:</strong> 더 명확한 상태 추적, 개선된 assign</p>
+
+    <div>
+      <button id="createBtn">주문 생성</button>
+      <button id="submitBtn">승인 요청</button>
+      <button id="approveBtn">승인</button>
+      <button id="rejectBtn">반려</button>
+      <button id="cancelBtn">취소</button>
+    </div>
+
+    <div>
+      <p>주문 상태: <span id="status">신규</span></p>
+      <p>주문 번호: <span id="orderNo">-</span></p>
+      <p>고객: <span id="customer">ABC 회사</span></p>
+      <p>금액: <span id="amount">₩1,500,000</span></p>
+      <p>승인자: <span id="approver">-</span></p>
+      <p>생성일: <span id="createdDate">-</span></p>
+    </div>
+
+    <script type="module">
+      import {
+        createMachine,
+        assign,
+        createActor,
+      } from "https://cdn.skypack.dev/xstate@5";
+
+      console.log("XState v5 로드 완료:", {
+        createMachine,
+        assign,
+        createActor,
+      });
+      const saleOrderMachine = createMachine({
+        id: "saleOrder",
+        initial: "draft",
+        context: {
+          orderNo: null,
+          customer: "ABC 회사",
+          amount: 1500000,
+          approver: null,
+          createdDate: null,
+        },
+        states: {
+          draft: {
+            on: {
+              CREATE: {
+                target: "created",
+                actions: assign({
+                  orderNo: () =>
+                    "SO" +
+                    new Date().getFullYear() +
+                    String(Date.now()).substr(-6),
+                  createdDate: () => new Date().toLocaleString(),
+                }),
+              },
+            },
+          },
+          created: {
+            on: {
+              SUBMIT: "pendingApproval",
+              CANCEL: "cancelled",
+            },
+          },
+          pendingApproval: {
+            on: {
+              APPROVE: {
+                target: "approved",
+                actions: assign({ approver: () => "김승인" }),
+              },
+              REJECT: {
+                target: "rejected",
+                actions: assign({ approver: () => "김승인" }),
+              },
+            },
+          },
+          approved: {
+            on: {
+              CANCEL: "cancelled",
+            },
+          },
+          rejected: {
+            on: {
+              CREATE: {
+                target: "created",
+                actions: assign({
+                  orderNo: null,
+                  approver: null,
+                  createdDate: null,
+                }),
+              },
+            },
+          },
+          cancelled: {
+            type: "final",
+          },
+        },
+      });
+
+      const actor = createActor(saleOrderMachine);
+      actor.start();
+
+      function updateUI() {
+        const currentState = actor.getSnapshot();
+
+        const statusMap = {
+          draft: "신규",
+          created: "생성됨",
+          pendingApproval: "승인대기",
+          approved: "승인완료",
+          rejected: "반려됨",
+          cancelled: "취소됨",
+        };
+
+        document.getElementById("status").textContent =
+          statusMap[currentState.value];
+        document.getElementById("orderNo").textContent =
+          currentState.context.orderNo || "-";
+        document.getElementById("customer").textContent =
+          currentState.context.customer;
+        document.getElementById(
+          "amount"
+        ).textContent = `₩${currentState.context.amount.toLocaleString()}`;
+        document.getElementById("approver").textContent =
+          currentState.context.approver || "-";
+        document.getElementById("createdDate").textContent =
+          currentState.context.createdDate || "-";
+
+        // 버튼 활성화
+        document.getElementById("createBtn").disabled =
+          !currentState.matches("draft") && !currentState.matches("rejected");
+        document.getElementById("submitBtn").disabled =
+          !currentState.matches("created");
+        document.getElementById("approveBtn").disabled =
+          !currentState.matches("pendingApproval");
+        document.getElementById("rejectBtn").disabled =
+          !currentState.matches("pendingApproval");
+        document.getElementById("cancelBtn").disabled =
+          currentState.matches("cancelled") || currentState.matches("draft");
+      }
+
+      actor.subscribe(updateUI);
+
+      function send(event) {
+        actor.send({ type: event });
+      }
+
+      document.getElementById("createBtn").onclick = () => send("CREATE");
+      document.getElementById("submitBtn").onclick = () => send("SUBMIT");
+      document.getElementById("approveBtn").onclick = () => send("APPROVE");
+      document.getElementById("rejectBtn").onclick = () => send("REJECT");
+      document.getElementById("cancelBtn").onclick = () => send("CANCEL");
+
+      updateUI();
+    </script>
+  </body>
+</html>
